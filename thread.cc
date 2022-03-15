@@ -1,22 +1,27 @@
 #include <iostream>
-#include <ucontext.h>
+//#include <ucontext.h>
 
 #include "thread.h"
 #include "interrupt.h"
 
 using namespace std;
 
-int thread_libinit(thread_startfunc_t func, void *arg) {
+int thread_libinit(thread_startfunc_t func, void* arg) {
+    static int init = 0;
+    if (init == 0)
+        init = 1;
+    else {
+        cout << "Thread library should only be initialed once." << endl;
+        return -1;
+    }
 
-
-
-
+    func(arg);
 
     cout << "Thread library exiting." << endl;
     exit(0);
 }
 
-int thread_create(thread_startfunc_t func, void *arg) {
+int thread_create(thread_startfunc_t func, void* arg) {
     return 0;
 }
 
