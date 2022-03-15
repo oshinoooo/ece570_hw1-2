@@ -34,7 +34,7 @@ int thread_create(thread_startfunc_t func, void* arg) {
         return -1;
     }
 
-    
+    ucontext_t new_context;
 
 
     return 0;
