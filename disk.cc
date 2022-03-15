@@ -6,13 +6,11 @@
 #include <limits.h>
 
 #include "thread.h"
-#include "interrupt.h"
 
 using namespace std;
 
-unsigned int lock = 0;
-unsigned int full_buffer = 1;
-unsigned int available_buffer = 2;
+unsigned int myLock = 0;
+unsigned int cond = 1;
 
 long current_position;
 long max_disk_queue;
@@ -68,14 +66,14 @@ void init(int argc, char* argv[]) {
 }
 
 void sendRequest(void* ptr) {
-    thread_lock(lock);
+    thread_lock(myLock);
 
     long requester_id = (long)ptr;
     queue<string>& tracks = requests[requester_id];
 
     while (!tracks.empty()) {
         while(max_disk_queue <= buffer.size() || buffer.count(requester_id)) {
-            thread_wait(lock, available_buffer);
+            thread_wait(myLock, cond);
         }
 
         buffer.insert({requester_id, tracks.front()});
@@ -84,23 +82,20 @@ void sendRequest(void* ptr) {
 
         tracks.pop();
 
-        if (max_disk_queue > buffer.size())
-            thread_broadcast(lock, available_buffer);
-        else
-            thread_broadcast(lock, full_buffer);
+        thread_broadcast(myLock, cond);
 
 //        printSchedulerState();
     }
 
-    thread_unlock(lock);
+    thread_unlock(myLock);
 }
 
 void processRequest(void* ptr) {
-    thread_lock(lock);
+    thread_lock(myLock);
 
     while (max_disk_queue > 0 || !buffer.empty()) {
         while(max_disk_queue > buffer.size()) {
-            thread_wait(lock, full_buffer);
+            thread_wait(myLock, cond);
         }
 
         long requester_id;
@@ -126,13 +121,12 @@ void processRequest(void* ptr) {
             max_disk_queue = min(max_disk_queue, number_of_requesters);
         }
 
-        if (max_disk_queue > buffer.size())
-            thread_broadcast(lock, available_buffer);
+        thread_broadcast(myLock, cond);
 
 //        printSchedulerState();
     }
 
-    thread_unlock(lock);
+    thread_unlock(myLock);
 }
 
 void startDiskScheduler(void* ptr) {
