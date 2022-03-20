@@ -10,14 +10,35 @@ using namespace std;
 
 enum status {FREE, BUSY};
 static bool lib_initialized = false;
+ucontext_t* scheduler_ucontext_ptr = new ucontext_t;
+
 queue<ucontext_t*> ready_que;
 map<unsigned int, queue<ucontext_t*>> lock_que;
 map<unsigned int, queue<ucontext_t*>> cond_que;
 map<unsigned int, status> lock_status;
 
-void scheduler() {
-    while (!ready_que.empty()) {
+struct TCB {
+public:
+    TCB() : thread_status(0), ucontext_ptr(nullptr) {}
+    TCB(int _thread_status) : thread_status(_thread_status), ucontext_ptr(nullptr) {}
+    TCB(int _thread_status, ucontext_t* _ucontext_ptr) : thread_status(_thread_status), ucontext_ptr(_ucontext_ptr) {}
 
+public:
+    int thread_status;
+    ucontext_t* ucontext_ptr;
+};
+
+void join() {
+
+}
+
+void scheduler() {
+    getcontext(scheduler_ucontext_ptr);
+
+    while (!ready_que.empty()) {
+        ucontext_t* next_ucontext_ptr = ready_que.front();
+        ready_que.pop();
+        swapcontext(next_ucontext_ptr, scheduler_ucontext_ptr);
     }
 }
 
@@ -33,6 +54,8 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     func(arg);
 
     scheduler();
+
+    join();
 
     cout << "Thread library exiting." << endl;
     exit(0);
@@ -52,7 +75,7 @@ int thread_create(thread_startfunc_t func, void* arg) {
     next_ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
     next_ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
     next_ucontext_ptr->uc_stack.ss_flags = 0;
-    next_ucontext_ptr->uc_link           = nullptr;
+    next_ucontext_ptr->uc_link           = scheduler_ucontext_ptr;
     makecontext(next_ucontext_ptr, (void (*)())func, 1, arg);
 
     ready_que.push(next_ucontext_ptr);
