@@ -8,16 +8,12 @@
 
 using namespace std;
 
-static enum thread_status {RUNNING, FINISHED};
-
 struct thread_control_block {
 public:
-    thread_control_block() : status(RUNNING), ucontext_ptr(nullptr) {}
-    thread_control_block(thread_status _status) : status(_status), ucontext_ptr(nullptr) {}
-    thread_control_block(thread_status _status, ucontext_t* _ucontext_ptr) : status(_status), ucontext_ptr(_ucontext_ptr) {}
+    thread_control_block() : ucontext_ptr(nullptr) {}
+    thread_control_block(ucontext_t* _ucontext_ptr) : ucontext_ptr(_ucontext_ptr) {}
 
 public:
-    thread_status status;
     ucontext_t* ucontext_ptr;
 };
 

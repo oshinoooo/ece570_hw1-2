@@ -48,11 +48,11 @@ static void process() {
         READY_QUEUE.pop();
         swapcontext(SWITCH_THREAD->ucontext, RUNNING_THREAD->ucontext);
     }
-    // At this point, ALL threads are done running or deadlocked.
-    // Do one last cleanup call.
+
     cleanup();
-    // Exit.
+
     cout << "Thread library exiting.\n";
+
     exit(0);
 }
 
@@ -76,7 +76,6 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     SWITCH_THREAD = new TCB;
     SWITCH_THREAD->status = 0;
 
-    // Set up the ucontext.
     SWITCH_THREAD->ucontext = new ucontext_t;
     getcontext(SWITCH_THREAD->ucontext);
     SWITCH_THREAD->ucontext->uc_stack.ss_sp = new char [STACK_SIZE];
@@ -90,7 +89,6 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     RUNNING_THREAD = READY_QUEUE.front();
     READY_QUEUE.pop();
 
-    // Call the function manually.
     func(arg);
     interrupt_disable();
 
@@ -99,6 +97,7 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     // next thread if there are any.
     // We set the first thread status to complete.
     RUNNING_THREAD->status = 3;
+
     swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
 }
 
