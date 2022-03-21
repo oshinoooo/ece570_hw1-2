@@ -43,7 +43,8 @@ static void release(thread_control_block* thread_ptr) {
 
 static void scheduler() {
     while (!ready_queue.empty()) {
-        release();
+        running_thread_ptr = ready_queue.front();
+        ready_queue.pop();
         swapcontext(scheduler_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
     }
 
@@ -53,20 +54,9 @@ static void scheduler() {
 }
 
 static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
-    interrupt_enable();
-
     func(arg);
-
-    interrupt_disable();
-
     release(thread_ptr);
-
-    thread_control_block* next_thread_ptr = ready_queue.front();
-    ready_queue.pop();
-
-    running_thread_ptr = next_thread_ptr;
-
-    setcontext(next_thread_ptr->ucontext_ptr);
+    swapcontext(running_thread_ptr->ucontext_ptr, scheduler_thread_ptr->ucontext_ptr);
 }
 
 int thread_libinit(thread_startfunc_t func, void* arg) {
@@ -87,10 +77,10 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     scheduler_thread_ptr->ucontext_ptr->uc_link           = nullptr;
     makecontext(scheduler_thread_ptr->ucontext_ptr, (void (*)())scheduler, 0);
 
+    // call user's function
     func(arg);
 
-    interrupt_disable();
-
+    // go to scheduler thread
     setcontext(scheduler_thread_ptr->ucontext_ptr);
 }
 

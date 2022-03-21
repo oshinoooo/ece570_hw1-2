@@ -58,13 +58,10 @@ static void process() {
 
 static void STUB(thread_startfunc_t func, void *arg) {
     interrupt_enable();
-
     func(arg);
-
     interrupt_disable();
 
     RUNNING_THREAD->status = 3;
-
     swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
 }
 
