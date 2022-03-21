@@ -229,51 +229,50 @@ int thread_wait(unsigned int lock, unsigned int cond) {
         LOCK_QUEUE_MAP[lock].pop();
     }
 
-    pair<unsigned int, unsigned int> lock_cond_pair = make_pair(lock,cond);
-    if (CV_QUEUE_MAP.find(lock_cond_pair) == CV_QUEUE_MAP.end()){
-        queue<TCB*> NEW_CV_QUEUE;
-        CV_QUEUE_MAP[lock_cond_pair] = NEW_CV_QUEUE;
-    }
-    // Push thread to tail of CV waiting queue.
-    CV_QUEUE_MAP[lock_cond_pair].push(RUNNING_THREAD);
-    // Switch thread so that thread from the front of ready queue runs.
+    CV_QUEUE_MAP[{lock, cond}].push(RUNNING_THREAD);
+
     swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
 
     interrupt_enable();
-    // After returning from swapcontext and being awoken, we must first reacquire the lock.
-    return thread_lock(lock);
+
+    thread_lock(lock);
+
+    return 0;
 }
 
 int thread_signal(unsigned int lock, unsigned int cond){
     interrupt_disable();
+
     if (!islib) {
-        // printf("Thread library must be initialized first. Call thread_libinit(...) first.");
         interrupt_enable();
         return -1;
     }
-    // Take first waiter from CV wait queue and push to end of ready queue.
-    pair<unsigned int, unsigned int> lock_cond_pair = make_pair(lock,cond);
-    if (!CV_QUEUE_MAP[lock_cond_pair].empty()) {
-        READY_QUEUE.push(CV_QUEUE_MAP[lock_cond_pair].front());
-        CV_QUEUE_MAP[lock_cond_pair].pop();
+
+    if (!CV_QUEUE_MAP[{lock,cond}].empty()) {
+        READY_QUEUE.push(CV_QUEUE_MAP[{lock,cond}].front());
+        CV_QUEUE_MAP[{lock,cond}].pop();
     };
-    interrupt_enable(); // BADENABLE
+
+    interrupt_enable();
+
     return 0;
 }
 
 int thread_broadcast(unsigned int lock, unsigned int cond) {
     interrupt_disable();
+
     if (!islib) {
-        // printf("Thread library must be initialized first. Call thread_libinit(...) first.");
         interrupt_enable();
         return -1;
     }
-    // Take all waiters from CV wait queue and push to end of ready queue.
+
     pair<unsigned int, unsigned int> lock_cond_pair = make_pair(lock,cond);
     while (!CV_QUEUE_MAP[lock_cond_pair].empty()){
         READY_QUEUE.push(CV_QUEUE_MAP[lock_cond_pair].front());
         CV_QUEUE_MAP[lock_cond_pair].pop();
     }
+
     interrupt_enable();
-  return 0;
+
+    return 0;
 }

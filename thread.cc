@@ -164,7 +164,7 @@ int thread_unlock(unsigned int lock) {
         return -1;
     }
 
-    if (!lock_holder[lock] ||
+    if (lock_holder[lock] == nullptr ||
         lock_holder[lock] != running_thread_ptr) {
         interrupt_enable();
         return -1;
@@ -185,26 +185,13 @@ int thread_unlock(unsigned int lock) {
 }
 
 int thread_wait(unsigned int lock, unsigned int cond) {
+    thread_unlock(lock);
+
     interrupt_disable();
 
     if (!lib_initialized) {
         interrupt_enable();
         return -1;
-    }
-
-    if (!lock_holder[lock] ||
-        lock_holder[lock] != running_thread_ptr) {
-        interrupt_enable();
-        return -1;
-    }
-
-    lock_holder[lock] = nullptr;
-
-    if (!lock_que.empty()) {
-        thread_control_block* next_thread_ptr = lock_que[lock].front();
-        lock_que[lock].pop();
-        lock_holder[lock] = next_thread_ptr;
-        ready_que.push(next_thread_ptr);
     }
 
     cond_que[cond].push(running_thread_ptr);
@@ -225,15 +212,14 @@ int thread_signal(unsigned int lock, unsigned int cond) {
     interrupt_disable();
 
     if (!lib_initialized) {
-//        cout << "Thread library should be initialized first." << endl;
         interrupt_enable();
         return -1;
     }
 
     if (!cond_que[cond].empty()) {
-        ucontext_t* next_ucontext_ptr = cond_que[cond].front();
+        thread_control_block* next_thread_ptr = cond_que[cond].front();
         cond_que[cond].pop();
-        ready_que.push(next_ucontext_ptr);
+        ready_que.push(next_thread_ptr);
     }
 
     interrupt_enable();
@@ -245,15 +231,14 @@ int thread_broadcast(unsigned int lock, unsigned int cond) {
     interrupt_disable();
 
     if (!lib_initialized) {
-//        cout << "Thread library should be initialized first." << endl;
         interrupt_enable();
         return -1;
     }
 
     while (!cond_que[cond].empty()) {
-        ucontext_t* next_ucontext_ptr = cond_que[cond].front();
+        thread_control_block* next_thread_ptr = cond_que[cond].front();
         cond_que[cond].pop();
-        ready_que.push(next_ucontext_ptr);
+        ready_que.push(next_thread_ptr);
     }
 
     interrupt_enable();
