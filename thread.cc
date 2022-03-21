@@ -8,7 +8,7 @@
 
 using namespace std;
 
-enum thread_status {RUNNING, FINISHED};
+static enum thread_status {RUNNING, FINISHED};
 
 struct thread_control_block {
 public:
@@ -22,16 +22,17 @@ public:
 };
 
 static bool is_initialized = false;
-thread_control_block* running_thread_ptr;
+static thread_control_block* running_thread_ptr;
 
-queue<thread_control_block*> ready_queue;
-map<unsigned int, thread_control_block*> lock_holder;
-map<unsigned int, queue<thread_control_block*>> lock_queue;
-map<unsigned int, queue<thread_control_block*>> cond_queue;
+static queue<thread_control_block*> ready_queue;
+static map<unsigned int, thread_control_block*> lock_holder;
+static map<unsigned int, queue<thread_control_block*>> lock_queue;
+static map<unsigned int, queue<thread_control_block*>> cond_queue;
 
-void release(thread_control_block* thread_ptr) {
-    if (!thread_ptr)
+static void release(thread_control_block* thread_ptr) {
+    if (!thread_ptr) {
         return;
+    }
 
     delete (char*) thread_ptr->ucontext_ptr->uc_stack.ss_sp;
     thread_ptr->ucontext_ptr->uc_stack.ss_sp = nullptr;
@@ -43,7 +44,7 @@ void release(thread_control_block* thread_ptr) {
     thread_ptr = nullptr;
 }
 
-void scheduler() {
+static void scheduler() {
     while (!ready_queue.empty()) {
 //        cleanup();
         thread_control_block* thread_ptr = ready_queue.front();
@@ -52,7 +53,7 @@ void scheduler() {
     }
 }
 
-void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
+static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
     interrupt_enable();
 
     func(arg);

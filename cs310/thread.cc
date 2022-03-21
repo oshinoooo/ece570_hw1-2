@@ -28,7 +28,8 @@ static void cleanup() {
     if (RUNNING_THREAD == NULL) {
         return;
     }
-    if (RUNNING_THREAD->status == 3){
+
+    if (RUNNING_THREAD->status == 3) {
         delete (char*) RUNNING_THREAD->ucontext->uc_stack.ss_sp;
         RUNNING_THREAD->ucontext->uc_stack.ss_sp = NULL;
         RUNNING_THREAD->ucontext->uc_stack.ss_size = 0;
@@ -40,7 +41,7 @@ static void cleanup() {
     }
 }
 
-static void process(thread_startfunc_t func, void *arg) {
+static void process() {
     while (!READY_QUEUE.empty()) {
         cleanup();
         RUNNING_THREAD = READY_QUEUE.front();
@@ -82,7 +83,7 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     SWITCH_THREAD->ucontext->uc_stack.ss_size = STACK_SIZE;
     SWITCH_THREAD->ucontext->uc_stack.ss_flags = 0;
     SWITCH_THREAD->ucontext->uc_link = NULL;
-    makecontext(SWITCH_THREAD->ucontext, (void (*)()) process, 2, func, arg);
+    makecontext(SWITCH_THREAD->ucontext, process, 0);
 
     thread_create(func, arg);
 
