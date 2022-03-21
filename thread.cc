@@ -8,54 +8,71 @@
 
 using namespace std;
 
-enum status {FREE, BUSY};
-static bool lib_initialized = false;
-ucontext_t* scheduler_ucontext_ptr = new ucontext_t;
+enum lock_status {FREE, BUSY};
+enum thread_status {RUNNING, FINISHED};
 
-queue<ucontext_t*> ready_que;
-map<unsigned int, queue<ucontext_t*>> lock_que;
-map<unsigned int, queue<ucontext_t*>> cond_que;
-map<unsigned int, status> lock_status;
-
-struct TCB {
+struct thread_control_block {
 public:
-    TCB() : thread_status(0), ucontext_ptr(nullptr) {}
-    TCB(int _thread_status) : thread_status(_thread_status), ucontext_ptr(nullptr) {}
-    TCB(int _thread_status, ucontext_t* _ucontext_ptr) : thread_status(_thread_status), ucontext_ptr(_ucontext_ptr) {}
+    thread_control_block() : status(RUNNING), ucontext_ptr(nullptr) {}
+    thread_control_block(thread_status _status) : status(_status), ucontext_ptr(nullptr) {}
+    thread_control_block(thread_status _status, ucontext_t* _ucontext_ptr) : status(_status), ucontext_ptr(_ucontext_ptr) {}
 
 public:
-    int thread_status;
+    thread_status status;
     ucontext_t* ucontext_ptr;
 };
 
-void join() {
+static bool lib_initialized = false;
+thread_control_block* running_thread_ptr;
 
+queue<thread_control_block*> ready_que;
+map<unsigned int, queue<ucontext_t*>> lock_que;
+map<unsigned int, queue<ucontext_t*>> cond_que;
+map<unsigned int, lock_status> status_lock;
+
+void release(thread_control_block* thread_ptr) {
+    if (!thread_ptr)
+        return;
+
+    delete (char*) thread_ptr->ucontext_ptr->uc_stack.ss_sp;
+    thread_ptr->ucontext_ptr->uc_stack.ss_sp = nullptr;
+    thread_ptr->ucontext_ptr->uc_stack.ss_size = 0;
+    thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
+    thread_ptr->ucontext_ptr->uc_link = nullptr;
+    delete thread_ptr->ucontext_ptr;
+    delete thread_ptr;
+    thread_ptr = nullptr;
+}
+
+void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
+    interrupt_enable();
+
+    func(arg);
+
+    interrupt_disable();
+
+    release(thread_ptr);
 }
 
 void scheduler() {
-    getcontext(scheduler_ucontext_ptr);
-
     while (!ready_que.empty()) {
-        ucontext_t* next_ucontext_ptr = ready_que.front();
+//        cleanup();
+        thread_control_block* thread_ptr = ready_que.front();
         ready_que.pop();
-        swapcontext(next_ucontext_ptr, scheduler_ucontext_ptr);
+        swapcontext(thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
     }
 }
 
 int thread_libinit(thread_startfunc_t func, void* arg) {
-    if (!lib_initialized) {
-        lib_initialized = true;
-    }
-    else {
-//        cout << "Thread library should only be initialized once." << endl;
+    if (lib_initialized) {
         return -1;
     }
+
+    lib_initialized = true;
 
     func(arg);
 
     scheduler();
-
-    join();
 
     cout << "Thread library exiting." << endl;
     exit(0);
@@ -65,20 +82,21 @@ int thread_create(thread_startfunc_t func, void* arg) {
     interrupt_disable();
 
     if (!lib_initialized) {
-//        cout << "Thread library should be initialized first." << endl;
         interrupt_enable();
         return -1;
     }
 
-    ucontext_t* next_ucontext_ptr = new ucontext_t;
-    getcontext(next_ucontext_ptr);
-    next_ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
-    next_ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
-    next_ucontext_ptr->uc_stack.ss_flags = 0;
-    next_ucontext_ptr->uc_link           = scheduler_ucontext_ptr;
-    makecontext(next_ucontext_ptr, (void (*)())func, 1, arg);
+    thread_control_block* new_thread = new thread_control_block();
 
-    ready_que.push(next_ucontext_ptr);
+    new_thread->ucontext_ptr = new ucontext_t;
+    getcontext(new_thread->ucontext_ptr);
+    new_thread->ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
+    new_thread->ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
+    new_thread->ucontext_ptr->uc_stack.ss_flags = 0;
+    new_thread->ucontext_ptr->uc_link           = nullptr;
+    makecontext(new_thread->ucontext_ptr, (void (*)())thread_monitor, 3, func, arg, new_thread);
+
+    ready_que.push(new_thread);
 
     interrupt_enable();
 
@@ -122,8 +140,8 @@ int thread_lock(unsigned int lock) {
         return -1;
     }
 
-    if (!lock_status.count(lock) || lock_status[lock] == FREE) {
-        lock_status[lock] = BUSY;
+    if (!status_lock.count(lock) || status_lock[lock] == FREE) {
+        status_lock[lock] = BUSY;
     }
     else {
         ucontext_t* curr_ucontext_ptr = new ucontext_t;
@@ -150,10 +168,10 @@ int thread_unlock(unsigned int lock) {
         return -1;
     }
 
-    lock_status[lock] = FREE;
+    status_lock[lock] = FREE;
 
     if (!lock_que.empty()) {
-        lock_status[lock] = BUSY;
+        status_lock[lock] = BUSY;
         ucontext_t* next_ucontext_ptr = lock_que[lock].front();
         lock_que[lock].pop();
         ready_que.push(next_ucontext_ptr);
