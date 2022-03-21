@@ -18,6 +18,7 @@ public:
 };
 
 static bool is_initialized = false;
+static thread_control_block* scheduler_thread_ptr;
 static thread_control_block* running_thread_ptr;
 
 static queue<thread_control_block*> ready_queue;
@@ -42,11 +43,13 @@ static void release(thread_control_block* thread_ptr) {
 
 static void scheduler() {
     while (!ready_queue.empty()) {
-//        cleanup();
-        thread_control_block* thread_ptr = ready_queue.front();
-        ready_queue.pop();
-        swapcontext(thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
+        release();
+        swapcontext(scheduler_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
     }
+
+    cout << "Thread library exiting." << endl;
+
+    exit(0);
 }
 
 static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
@@ -57,6 +60,13 @@ static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_bl
     interrupt_disable();
 
     release(thread_ptr);
+
+    thread_control_block* next_thread_ptr = ready_queue.front();
+    ready_queue.pop();
+
+    running_thread_ptr = next_thread_ptr;
+
+    setcontext(next_thread_ptr->ucontext_ptr);
 }
 
 int thread_libinit(thread_startfunc_t func, void* arg) {
@@ -66,12 +76,22 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
 
     is_initialized = true;
 
+    // initialize the scheduler
+    scheduler_thread_ptr = new thread_control_block();
+
+    scheduler_thread_ptr->ucontext_ptr = new ucontext_t;
+    getcontext(scheduler_thread_ptr->ucontext_ptr);
+    scheduler_thread_ptr->ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
+    scheduler_thread_ptr->ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
+    scheduler_thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
+    scheduler_thread_ptr->ucontext_ptr->uc_link           = nullptr;
+    makecontext(scheduler_thread_ptr->ucontext_ptr, (void (*)())scheduler, 0);
+
     func(arg);
 
-    scheduler();
+    interrupt_disable();
 
-    cout << "Thread library exiting." << endl;
-    exit(0);
+    setcontext(scheduler_thread_ptr->ucontext_ptr);
 }
 
 int thread_create(thread_startfunc_t func, void* arg) {

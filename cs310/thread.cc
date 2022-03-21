@@ -58,7 +58,9 @@ static void process() {
 
 static void STUB(thread_startfunc_t func, void *arg) {
     interrupt_enable();
+
     func(arg);
+
     interrupt_disable();
 
     RUNNING_THREAD->status = 3;
@@ -90,12 +92,9 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     READY_QUEUE.pop();
 
     func(arg);
+
     interrupt_disable();
 
-    // Once the function has been called and executed,
-    // we swap to switch thread for cleanup and so that we may run our
-    // next thread if there are any.
-    // We set the first thread status to complete.
     RUNNING_THREAD->status = 3;
 
     swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
@@ -120,10 +119,10 @@ int thread_create(thread_startfunc_t func, void *arg) {
     newThread->ucontext->uc_link = NULL;
     makecontext(newThread->ucontext, (void (*)())STUB, 2, func, arg);
 
-    // Push the thread on to the ready queue, since it is now ready.
     READY_QUEUE.push(newThread);
 
     interrupt_enable();
+
     return 0;
 }
 
