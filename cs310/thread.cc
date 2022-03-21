@@ -129,6 +129,7 @@ int thread_create(thread_startfunc_t func, void *arg) {
 
 int thread_yield(void) {
     interrupt_disable();
+
     if (!islib) {
         interrupt_enable();
         return -1;

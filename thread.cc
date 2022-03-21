@@ -8,7 +8,6 @@
 
 using namespace std;
 
-enum lock_status {FREE, BUSY};
 enum thread_status {RUNNING, FINISHED};
 
 struct thread_control_block {
@@ -22,7 +21,7 @@ public:
     ucontext_t* ucontext_ptr;
 };
 
-static bool lib_initialized = false;
+static bool is_initialized = false;
 thread_control_block* running_thread_ptr;
 
 queue<thread_control_block*> ready_queue;
@@ -44,6 +43,15 @@ void release(thread_control_block* thread_ptr) {
     thread_ptr = nullptr;
 }
 
+void scheduler() {
+    while (!ready_queue.empty()) {
+//        cleanup();
+        thread_control_block* thread_ptr = ready_queue.front();
+        ready_queue.pop();
+        swapcontext(thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
+    }
+}
+
 void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
     interrupt_enable();
 
@@ -54,21 +62,12 @@ void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* th
     release(thread_ptr);
 }
 
-void scheduler() {
-    while (!ready_queue.empty()) {
-//        cleanup();
-        thread_control_block* thread_ptr = ready_queue.front();
-        ready_queue.pop();
-        swapcontext(thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
-    }
-}
-
 int thread_libinit(thread_startfunc_t func, void* arg) {
-    if (lib_initialized) {
+    if (is_initialized) {
         return -1;
     }
 
-    lib_initialized = true;
+    is_initialized = true;
 
     func(arg);
 
@@ -81,7 +80,7 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
 int thread_create(thread_startfunc_t func, void* arg) {
     interrupt_disable();
 
-    if (!lib_initialized) {
+    if (!is_initialized) {
         interrupt_enable();
         return -1;
     }
@@ -106,7 +105,7 @@ int thread_create(thread_startfunc_t func, void* arg) {
 int thread_yield(void) {
     interrupt_disable();
 
-    if (!lib_initialized) {
+    if (!is_initialized) {
         interrupt_enable();
         return -1;
     }
@@ -131,7 +130,7 @@ int thread_yield(void) {
 int thread_lock(unsigned int lock) {
     interrupt_disable();
 
-    if (!lib_initialized) {
+    if (!is_initialized) {
         interrupt_enable();
         return -1;
     }
@@ -159,7 +158,7 @@ int thread_lock(unsigned int lock) {
 int thread_unlock(unsigned int lock) {
     interrupt_disable();
 
-    if (!lib_initialized) {
+    if (!is_initialized) {
         interrupt_enable();
         return -1;
     }
@@ -189,7 +188,7 @@ int thread_wait(unsigned int lock, unsigned int cond) {
 
     interrupt_disable();
 
-    if (!lib_initialized) {
+    if (!is_initialized) {
         interrupt_enable();
         return -1;
     }
@@ -211,7 +210,7 @@ int thread_wait(unsigned int lock, unsigned int cond) {
 int thread_signal(unsigned int lock, unsigned int cond) {
     interrupt_disable();
 
-    if (!lib_initialized) {
+    if (!is_initialized) {
         interrupt_enable();
         return -1;
     }
@@ -230,7 +229,7 @@ int thread_signal(unsigned int lock, unsigned int cond) {
 int thread_broadcast(unsigned int lock, unsigned int cond) {
     interrupt_disable();
 
-    if (!lib_initialized) {
+    if (!is_initialized) {
         interrupt_enable();
         return -1;
     }
