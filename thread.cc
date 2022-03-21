@@ -26,9 +26,9 @@ static bool lib_initialized = false;
 thread_control_block* running_thread_ptr;
 
 queue<thread_control_block*> ready_que;
-map<unsigned int, queue<ucontext_t*>> lock_que;
-map<unsigned int, queue<ucontext_t*>> cond_que;
-map<unsigned int, lock_status> status_lock;
+map<unsigned int, thread_control_block*> lock_holder;
+map<unsigned int, queue<thread_control_block*>> lock_que;
+map<unsigned int, queue<thread_control_block*>> cond_que;
 
 void release(thread_control_block* thread_ptr) {
     if (!thread_ptr)
@@ -107,7 +107,6 @@ int thread_yield(void) {
     interrupt_disable();
 
     if (!lib_initialized) {
-//        cout << "Thread library should be initialized first." << endl;
         interrupt_enable();
         return -1;
     }
@@ -117,14 +116,12 @@ int thread_yield(void) {
         return 0;
     }
 
-    ucontext_t* curr_ucontext_ptr = new ucontext_t;
-    getcontext(curr_ucontext_ptr);
-    ready_que.push(curr_ucontext_ptr);
+    ready_que.push(running_thread_ptr);
 
-    ucontext_t* next_ucontext_ptr = ready_que.front();
+    thread_control_block* next_thread_ptr = ready_que.front();
     ready_que.pop();
 
-    swapcontext(curr_ucontext_ptr, next_ucontext_ptr);
+    swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
 
     interrupt_enable();
 
@@ -135,23 +132,23 @@ int thread_lock(unsigned int lock) {
     interrupt_disable();
 
     if (!lib_initialized) {
-//        cout << "Thread library should be initialized first." << endl;
         interrupt_enable();
         return -1;
     }
 
-    if (!status_lock.count(lock) || status_lock[lock] == FREE) {
-        status_lock[lock] = BUSY;
+    if (lock_holder[lock] == running_thread_ptr) {
+        interrupt_enable();
+        return -1;
+    }
+
+    if (lock_holder[lock]) {
+        lock_que[lock].push(running_thread_ptr);
+        thread_control_block* next_thread_ptr = ready_que.front();
+        ready_que.pop();
+        swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
     }
     else {
-        ucontext_t* curr_ucontext_ptr = new ucontext_t;
-        getcontext(curr_ucontext_ptr);
-        lock_que[lock].push(curr_ucontext_ptr);
-
-        ucontext_t* next_ucontext_ptr = ready_que.front();
-        ready_que.pop();
-
-        swapcontext(curr_ucontext_ptr, next_ucontext_ptr);
+        lock_holder[lock] = running_thread_ptr;
     }
 
     interrupt_enable();
@@ -163,18 +160,23 @@ int thread_unlock(unsigned int lock) {
     interrupt_disable();
 
     if (!lib_initialized) {
-//        cout << "Thread library should be initialized first." << endl;
         interrupt_enable();
         return -1;
     }
 
-    status_lock[lock] = FREE;
+    if (!lock_holder[lock] ||
+        lock_holder[lock] != running_thread_ptr) {
+        interrupt_enable();
+        return -1;
+    }
+
+    lock_holder[lock] = nullptr;
 
     if (!lock_que.empty()) {
-        status_lock[lock] = BUSY;
-        ucontext_t* next_ucontext_ptr = lock_que[lock].front();
+        thread_control_block* next_thread_ptr = lock_que[lock].front();
         lock_que[lock].pop();
-        ready_que.push(next_ucontext_ptr);
+        lock_holder[lock] = next_thread_ptr;
+        ready_que.push(next_thread_ptr);
     }
 
     interrupt_enable();
@@ -186,12 +188,24 @@ int thread_wait(unsigned int lock, unsigned int cond) {
     interrupt_disable();
 
     if (!lib_initialized) {
-//        cout << "Thread library should be initialized first." << endl;
         interrupt_enable();
         return -1;
     }
 
-    thread_unlock(lock);
+    if (!lock_holder[lock] ||
+        lock_holder[lock] != running_thread_ptr) {
+        interrupt_enable();
+        return -1;
+    }
+
+    lock_holder[lock] = nullptr;
+
+    if (!lock_que.empty()) {
+        thread_control_block* next_thread_ptr = lock_que[lock].front();
+        lock_que[lock].pop();
+        lock_holder[lock] = next_thread_ptr;
+        ready_que.push(next_thread_ptr);
+    }
 
     ucontext_t* curr_ucontext_ptr = new ucontext_t;
     getcontext(curr_ucontext_ptr);

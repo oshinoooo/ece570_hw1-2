@@ -21,3 +21,7 @@ int main(int argc, char* argv[]) {
     thread_libinit(start, nullptr);
     return 0;
 }
+
+
+// double lock
+// double everything
