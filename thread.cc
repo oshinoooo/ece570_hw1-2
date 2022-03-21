@@ -207,18 +207,16 @@ int thread_wait(unsigned int lock, unsigned int cond) {
         ready_que.push(next_thread_ptr);
     }
 
-    ucontext_t* curr_ucontext_ptr = new ucontext_t;
-    getcontext(curr_ucontext_ptr);
-    cond_que[cond].push(curr_ucontext_ptr);
+    cond_que[cond].push(running_thread_ptr);
 
-    ucontext_t* next_ucontext_ptr = ready_que.front();
+    thread_control_block* next_thread_ptr = ready_que.front();
     ready_que.pop();
 
-    swapcontext(curr_ucontext_ptr, next_ucontext_ptr);
-
-    thread_lock(lock);
+    swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
 
     interrupt_enable();
+
+    thread_lock(lock);
 
     return 0;
 }
