@@ -10,18 +10,19 @@
 
 using namespace std;
 
-static TCB* RUNNING_THREAD;
-static TCB* SWITCH_THREAD;
-static queue<TCB*> READY_QUEUE;
-static map<unsigned int, queue<TCB*>> LOCK_QUEUE_MAP;
-static map<pair<unsigned int, unsigned int>, queue<TCB*>> CV_QUEUE_MAP;
-static map<unsigned int, TCB*> LOCK_OWNER_MAP;
-static bool islib = false;
-
 struct TCB {
     ucontext_t* ucontext;
     int status; // 0 for not finished, 3 for cleanup
 };
+
+static bool islib = false;
+static TCB* RUNNING_THREAD;
+static TCB* SWITCH_THREAD;
+
+static queue<TCB*> READY_QUEUE;
+static map<unsigned int, queue<TCB*>> LOCK_QUEUE_MAP;
+static map<pair<unsigned int, unsigned int>, queue<TCB*>> CV_QUEUE_MAP;
+static map<unsigned int, TCB*> LOCK_OWNER_MAP;
 
 static void cleanup() {
     if (RUNNING_THREAD == NULL) {
