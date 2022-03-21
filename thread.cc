@@ -25,10 +25,10 @@ public:
 static bool lib_initialized = false;
 thread_control_block* running_thread_ptr;
 
-queue<thread_control_block*> ready_que;
+queue<thread_control_block*> ready_queue;
 map<unsigned int, thread_control_block*> lock_holder;
-map<unsigned int, queue<thread_control_block*>> lock_que;
-map<unsigned int, queue<thread_control_block*>> cond_que;
+map<unsigned int, queue<thread_control_block*>> lock_queue;
+map<unsigned int, queue<thread_control_block*>> cond_queue;
 
 void release(thread_control_block* thread_ptr) {
     if (!thread_ptr)
@@ -55,10 +55,10 @@ void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* th
 }
 
 void scheduler() {
-    while (!ready_que.empty()) {
+    while (!ready_queue.empty()) {
 //        cleanup();
-        thread_control_block* thread_ptr = ready_que.front();
-        ready_que.pop();
+        thread_control_block* thread_ptr = ready_queue.front();
+        ready_queue.pop();
         swapcontext(thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
     }
 }
@@ -96,7 +96,7 @@ int thread_create(thread_startfunc_t func, void* arg) {
     new_thread->ucontext_ptr->uc_link           = nullptr;
     makecontext(new_thread->ucontext_ptr, (void (*)())thread_monitor, 3, func, arg, new_thread);
 
-    ready_que.push(new_thread);
+    ready_queue.push(new_thread);
 
     interrupt_enable();
 
@@ -111,15 +111,15 @@ int thread_yield(void) {
         return -1;
     }
 
-    if (ready_que.empty()) {
+    if (ready_queue.empty()) {
         interrupt_enable();
         return 0;
     }
 
-    ready_que.push(running_thread_ptr);
+    ready_queue.push(running_thread_ptr);
 
-    thread_control_block* next_thread_ptr = ready_que.front();
-    ready_que.pop();
+    thread_control_block* next_thread_ptr = ready_queue.front();
+    ready_queue.pop();
 
     swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
 
@@ -142,9 +142,9 @@ int thread_lock(unsigned int lock) {
     }
 
     if (lock_holder[lock]) {
-        lock_que[lock].push(running_thread_ptr);
-        thread_control_block* next_thread_ptr = ready_que.front();
-        ready_que.pop();
+        lock_queue[lock].push(running_thread_ptr);
+        thread_control_block* next_thread_ptr = ready_queue.front();
+        ready_queue.pop();
         swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
     }
     else {
@@ -172,11 +172,11 @@ int thread_unlock(unsigned int lock) {
 
     lock_holder[lock] = nullptr;
 
-    if (!lock_que.empty()) {
-        thread_control_block* next_thread_ptr = lock_que[lock].front();
-        lock_que[lock].pop();
+    if (!lock_queue.empty()) {
+        thread_control_block* next_thread_ptr = lock_queue[lock].front();
+        lock_queue[lock].pop();
         lock_holder[lock] = next_thread_ptr;
-        ready_que.push(next_thread_ptr);
+        ready_queue.push(next_thread_ptr);
     }
 
     interrupt_enable();
@@ -194,10 +194,10 @@ int thread_wait(unsigned int lock, unsigned int cond) {
         return -1;
     }
 
-    cond_que[cond].push(running_thread_ptr);
+    cond_queue[cond].push(running_thread_ptr);
 
-    thread_control_block* next_thread_ptr = ready_que.front();
-    ready_que.pop();
+    thread_control_block* next_thread_ptr = ready_queue.front();
+    ready_queue.pop();
 
     swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
 
@@ -216,10 +216,10 @@ int thread_signal(unsigned int lock, unsigned int cond) {
         return -1;
     }
 
-    if (!cond_que[cond].empty()) {
-        thread_control_block* next_thread_ptr = cond_que[cond].front();
-        cond_que[cond].pop();
-        ready_que.push(next_thread_ptr);
+    if (!cond_queue[cond].empty()) {
+        thread_control_block* next_thread_ptr = cond_queue[cond].front();
+        cond_queue[cond].pop();
+        ready_queue.push(next_thread_ptr);
     }
 
     interrupt_enable();
@@ -235,10 +235,10 @@ int thread_broadcast(unsigned int lock, unsigned int cond) {
         return -1;
     }
 
-    while (!cond_que[cond].empty()) {
-        thread_control_block* next_thread_ptr = cond_que[cond].front();
-        cond_que[cond].pop();
-        ready_que.push(next_thread_ptr);
+    while (!cond_queue[cond].empty()) {
+        thread_control_block* next_thread_ptr = cond_queue[cond].front();
+        cond_queue[cond].pop();
+        ready_queue.push(next_thread_ptr);
     }
 
     interrupt_enable();
