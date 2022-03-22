@@ -34,33 +34,34 @@ void printSchedulerState() {
 }
 
 void init(int argc, char* argv[]) {
-    if (argc < 3) {
-        cout << "Please enter correct arguments." << endl;
-        return;
-    }
-
-    queue<string> paths;
-    for (int i = 2; i < argc; ++i)
-        paths.push(argv[i]);
-
     current_position = 0;
-    number_of_requesters = paths.size();
-    max_disk_queue = min((long)stoi(argv[1]), number_of_requesters);
-    while (!paths.empty()) {
-        ifstream file(paths.front());
-        if (!file.is_open())
-            continue;
+    max_disk_queue = min(3, 5);
+    number_of_requesters = 5;
 
-        queue<string> tracks;
-        string track;
-        while (file >> track)
-            tracks.push(track);
+    queue<string> tmp;
+    tmp.push("53");
+    tmp.push("785");
+    requests.push_back(tmp);
 
-        file.close();
+    tmp = queue<string>();
+    tmp.push("914");
+    tmp.push("350");
+    requests.push_back(tmp);
 
-        requests.push_back(tracks);
-        paths.pop();
-    }
+    tmp = queue<string>();
+    tmp.push("827");
+    tmp.push("567");
+    requests.push_back(tmp);
+
+    tmp = queue<string>();
+    tmp.push("302");
+    tmp.push("230");
+    requests.push_back(tmp);
+
+    tmp = queue<string>();
+    tmp.push("631");
+    tmp.push("11");
+    requests.push_back(tmp);
 
 //    printSchedulerState();
 }
