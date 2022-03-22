@@ -16,8 +16,8 @@ struct TCB {
 };
 
 static bool islib = false;
-static TCB* RUNNING_THREAD;
 static TCB* SWITCH_THREAD;
+static TCB* RUNNING_THREAD;
 
 static queue<TCB*> READY_QUEUE;
 static map<unsigned int, queue<TCB*>> LOCK_QUEUE_MAP;

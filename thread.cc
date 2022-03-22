@@ -18,7 +18,7 @@ public:
 };
 
 static bool is_initialized = false;
-static thread_control_block* scheduler_thread_ptr;
+static thread_control_block* main_thread_ptr;
 static thread_control_block* running_thread_ptr;
 
 static queue<thread_control_block*> ready_queue;
@@ -31,32 +31,20 @@ static void release(thread_control_block* thread_ptr) {
         return;
     }
 
-    delete (char*) thread_ptr->ucontext_ptr->uc_stack.ss_sp;
-    thread_ptr->ucontext_ptr->uc_stack.ss_sp = nullptr;
-    thread_ptr->ucontext_ptr->uc_stack.ss_size = 0;
+    delete[] thread_ptr->ucontext_ptr->uc_stack.ss_sp;
+    thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
+    thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
     thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
-    thread_ptr->ucontext_ptr->uc_link = nullptr;
+    thread_ptr->ucontext_ptr->uc_link           = nullptr;
     delete thread_ptr->ucontext_ptr;
     delete thread_ptr;
     thread_ptr = nullptr;
 }
 
-static void scheduler() {
-    while (!ready_queue.empty()) {
-        running_thread_ptr = ready_queue.front();
-        ready_queue.pop();
-        swapcontext(scheduler_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
-    }
-
-    cout << "Thread library exiting." << endl;
-
-    exit(0);
-}
-
 static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
     func(arg);
     release(thread_ptr);
-    swapcontext(running_thread_ptr->ucontext_ptr, scheduler_thread_ptr->ucontext_ptr);
+    setcontext(main_thread_ptr->ucontext_ptr);
 }
 
 int thread_libinit(thread_startfunc_t func, void* arg) {
@@ -67,21 +55,22 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     is_initialized = true;
 
     // initialize the scheduler
-    scheduler_thread_ptr = new thread_control_block();
-
-    scheduler_thread_ptr->ucontext_ptr = new ucontext_t;
-    getcontext(scheduler_thread_ptr->ucontext_ptr);
-    scheduler_thread_ptr->ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
-    scheduler_thread_ptr->ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
-    scheduler_thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
-    scheduler_thread_ptr->ucontext_ptr->uc_link           = nullptr;
-    makecontext(scheduler_thread_ptr->ucontext_ptr, (void (*)())scheduler, 0);
+    main_thread_ptr = new thread_control_block();
+    main_thread_ptr->ucontext_ptr = new ucontext_t;
+    getcontext(main_thread_ptr->ucontext_ptr);
 
     // call user's function
     func(arg);
 
-    // go to scheduler thread
-    setcontext(scheduler_thread_ptr->ucontext_ptr);
+    while (!ready_queue.empty()) {
+        running_thread_ptr = ready_queue.front();
+        ready_queue.pop();
+        swapcontext(main_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
+    }
+
+    cout << "Thread library exiting." << endl;
+
+    exit(0);
 }
 
 int thread_create(thread_startfunc_t func, void* arg) {
@@ -117,17 +106,13 @@ int thread_yield(void) {
         return -1;
     }
 
-    if (ready_queue.empty()) {
-        interrupt_enable();
-        return 0;
-    }
+    thread_control_block* prev_thread_ptr = running_thread_ptr;
+    ready_queue.push(prev_thread_ptr);
 
-    ready_queue.push(running_thread_ptr);
-
-    thread_control_block* next_thread_ptr = ready_queue.front();
+    running_thread_ptr = ready_queue.front();
     ready_queue.pop();
 
-    swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
+    swapcontext(prev_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
 
     interrupt_enable();
 
