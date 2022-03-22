@@ -31,18 +31,21 @@ static void release(thread_control_block* thread_ptr) {
         return;
     }
 
-    delete[] thread_ptr->ucontext_ptr->uc_stack.ss_sp;
     thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
     thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
     thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
     thread_ptr->ucontext_ptr->uc_link           = nullptr;
+    delete[] thread_ptr->ucontext_ptr->uc_stack.ss_sp;
     delete thread_ptr->ucontext_ptr;
     delete thread_ptr;
     thread_ptr = nullptr;
 }
 
 static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
+    interrupt_enable();
     func(arg);
+    interrupt_disable();
+
     release(thread_ptr);
     setcontext(main_thread_ptr->ucontext_ptr);
 }
@@ -61,6 +64,8 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
 
     // call user's function
     func(arg);
+
+    interrupt_disable();
 
     while (!ready_queue.empty()) {
         running_thread_ptr = ready_queue.front();
@@ -106,13 +111,9 @@ int thread_yield(void) {
         return -1;
     }
 
-    thread_control_block* prev_thread_ptr = running_thread_ptr;
-    ready_queue.push(prev_thread_ptr);
+    ready_queue.push(running_thread_ptr);
 
-    running_thread_ptr = ready_queue.front();
-    ready_queue.pop();
-
-    swapcontext(prev_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
+    swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
 
     interrupt_enable();
 
@@ -161,7 +162,7 @@ int thread_unlock(unsigned int lock) {
 
     lock_holder[lock] = nullptr;
 
-    if (!lock_queue.empty()) {
+    if (!lock_queue[lock].empty()) {
         thread_control_block* thread_ptr = lock_queue[lock].front();
         lock_queue[lock].pop();
         lock_holder[lock] = thread_ptr;
