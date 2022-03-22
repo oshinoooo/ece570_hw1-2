@@ -153,22 +153,18 @@ int thread_lock(unsigned int lock) {
         return -1;
     }
 
-    // Check if there is a queue for the lock in the
-    // lock queue map, and if not -- add one.
     if (LOCK_QUEUE_MAP.count(lock) == 0) {
-        LOCK_OWNER_MAP[lock] = NULL; // Lock has no owner yet.
-        queue<TCB*> NEW_LOCK_QUEUE; // Create empty queue.
+        LOCK_OWNER_MAP[lock] = NULL;
+        queue<TCB*> NEW_LOCK_QUEUE;
         LOCK_QUEUE_MAP.insert(pair<unsigned int, queue<TCB*> >(lock, NEW_LOCK_QUEUE) ); // Insert.
     }
 
-    // If the lock is owned by another thread.
     if (LOCK_OWNER_MAP[lock] != NULL) {
-        LOCK_QUEUE_MAP[lock].push(RUNNING_THREAD); // Push current thread to end of ready queue.
-        // Switch thread to run the head of the ready queue.
+        LOCK_QUEUE_MAP[lock].push(RUNNING_THREAD);
         swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
     }
     else {
-        LOCK_OWNER_MAP[lock] = RUNNING_THREAD; // Give lock to this thread.
+        LOCK_OWNER_MAP[lock] = RUNNING_THREAD;
     }
 
     interrupt_enable();
@@ -194,9 +190,10 @@ int thread_unlock(unsigned int lock) {
     LOCK_OWNER_MAP[lock] = NULL;
 
     if (!LOCK_QUEUE_MAP[lock].empty()) {
-        READY_QUEUE.push(LOCK_QUEUE_MAP[lock].front());
-        LOCK_OWNER_MAP[lock] = LOCK_QUEUE_MAP[lock].front();
+        TCB* thread = LOCK_QUEUE_MAP[lock].front();
         LOCK_QUEUE_MAP[lock].pop();
+        LOCK_OWNER_MAP[lock] = thread;
+        READY_QUEUE.push(thread);
     }
 
     interrupt_enable();
@@ -264,10 +261,9 @@ int thread_broadcast(unsigned int lock, unsigned int cond) {
         return -1;
     }
 
-    pair<unsigned int, unsigned int> lock_cond_pair = make_pair(lock,cond);
-    while (!CV_QUEUE_MAP[lock_cond_pair].empty()){
-        READY_QUEUE.push(CV_QUEUE_MAP[lock_cond_pair].front());
-        CV_QUEUE_MAP[lock_cond_pair].pop();
+    while (!CV_QUEUE_MAP[{lock, cond}].empty()){
+        READY_QUEUE.push(CV_QUEUE_MAP[{lock, cond}].front());
+        CV_QUEUE_MAP[{lock, cond}].pop();
     }
 
     interrupt_enable();

@@ -134,9 +134,7 @@ int thread_lock(unsigned int lock) {
 
     if (lock_holder[lock]) {
         lock_queue[lock].push(running_thread_ptr);
-        thread_control_block* next_thread_ptr = ready_queue.front();
-        ready_queue.pop();
-        swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
+        swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
     }
     else {
         lock_holder[lock] = running_thread_ptr;
@@ -164,10 +162,10 @@ int thread_unlock(unsigned int lock) {
     lock_holder[lock] = nullptr;
 
     if (!lock_queue.empty()) {
-        thread_control_block* next_thread_ptr = lock_queue[lock].front();
+        thread_control_block* thread_ptr = lock_queue[lock].front();
         lock_queue[lock].pop();
-        lock_holder[lock] = next_thread_ptr;
-        ready_queue.push(next_thread_ptr);
+        lock_holder[lock] = thread_ptr;
+        ready_queue.push(thread_ptr);
     }
 
     interrupt_enable();
@@ -187,10 +185,7 @@ int thread_wait(unsigned int lock, unsigned int cond) {
 
     cond_queue[cond].push(running_thread_ptr);
 
-    thread_control_block* next_thread_ptr = ready_queue.front();
-    ready_queue.pop();
-
-    swapcontext(running_thread_ptr->ucontext_ptr, next_thread_ptr->ucontext_ptr);
+    swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
 
     interrupt_enable();
 
@@ -208,9 +203,8 @@ int thread_signal(unsigned int lock, unsigned int cond) {
     }
 
     if (!cond_queue[cond].empty()) {
-        thread_control_block* next_thread_ptr = cond_queue[cond].front();
+        ready_queue.push(cond_queue[cond].front());
         cond_queue[cond].pop();
-        ready_queue.push(next_thread_ptr);
     }
 
     interrupt_enable();
@@ -227,9 +221,8 @@ int thread_broadcast(unsigned int lock, unsigned int cond) {
     }
 
     while (!cond_queue[cond].empty()) {
-        thread_control_block* next_thread_ptr = cond_queue[cond].front();
+        ready_queue.push(cond_queue[cond].front());
         cond_queue[cond].pop();
-        ready_queue.push(next_thread_ptr);
     }
 
     interrupt_enable();
