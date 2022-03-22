@@ -85,12 +85,11 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
 }
 
 int thread_create(thread_startfunc_t func, void* arg) {
-    interrupt_disable();
-
     if (!is_initialized) {
-        interrupt_enable();
         return -1;
     }
+
+    interrupt_disable();
 
     thread_control_block* new_thread = new thread_control_block();
     new_thread->ucontext_ptr = new ucontext_t;
@@ -109,12 +108,11 @@ int thread_create(thread_startfunc_t func, void* arg) {
 }
 
 int thread_yield(void) {
-    interrupt_disable();
-
     if (!is_initialized) {
-        interrupt_enable();
         return -1;
     }
+
+    interrupt_disable();
 
     ready_queue.push(running_thread_ptr);
 
@@ -126,12 +124,11 @@ int thread_yield(void) {
 }
 
 int thread_lock(unsigned int lock) {
-    interrupt_disable();
-
     if (!is_initialized) {
-        interrupt_enable();
         return -1;
     }
+
+    interrupt_disable();
 
     if (lock_holder[lock] == running_thread_ptr) {
         interrupt_enable();
@@ -152,12 +149,11 @@ int thread_lock(unsigned int lock) {
 }
 
 int thread_unlock(unsigned int lock) {
-    interrupt_disable();
-
     if (!is_initialized) {
-        interrupt_enable();
         return -1;
     }
+
+    interrupt_disable();
 
     if (lock_holder[lock] == nullptr ||
         lock_holder[lock] != running_thread_ptr) {
@@ -182,12 +178,11 @@ int thread_unlock(unsigned int lock) {
 int thread_wait(unsigned int lock, unsigned int cond) {
     thread_unlock(lock);
 
-    interrupt_disable();
-
     if (!is_initialized) {
-        interrupt_enable();
         return -1;
     }
+
+    interrupt_disable();
 
     cond_queue[{lock, cond}].push(running_thread_ptr);
 
@@ -201,12 +196,11 @@ int thread_wait(unsigned int lock, unsigned int cond) {
 }
 
 int thread_signal(unsigned int lock, unsigned int cond) {
-    interrupt_disable();
-
     if (!is_initialized) {
-        interrupt_enable();
         return -1;
     }
+
+    interrupt_disable();
 
     if (!cond_queue[{lock, cond}].empty()) {
         ready_queue.push(cond_queue[{lock, cond}].front());
@@ -219,12 +213,11 @@ int thread_signal(unsigned int lock, unsigned int cond) {
 }
 
 int thread_broadcast(unsigned int lock, unsigned int cond) {
-    interrupt_disable();
-
     if (!is_initialized) {
-        interrupt_enable();
         return -1;
     }
+
+    interrupt_disable();
 
     while (!cond_queue[{lock, cond}].empty()) {
         ready_queue.push(cond_queue[{lock, cond}].front());
