@@ -40,7 +40,7 @@ static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_bl
     thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
     thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
     thread_ptr->ucontext_ptr->uc_link           = nullptr;
-    delete[] thread_ptr->ucontext_ptr->uc_stack.ss_sp;
+    delete [] (char*)thread_ptr->ucontext_ptr->uc_stack.ss_sp;
     delete thread_ptr->ucontext_ptr;
     delete thread_ptr;
     thread_ptr = nullptr;
