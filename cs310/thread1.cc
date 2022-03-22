@@ -67,16 +67,7 @@ static int start(thread_startfunc_t func, void *arg) {
 	return 0;
 }
 
-static void deleteThread() {
-    delete currentThread->stack;
-    currentThread->_Context->uc_stack.ss_sp = NULL;
-    currentThread->_Context->uc_stack.ss_size = 0;
-    currentThread->_Context->uc_stack.ss_flags = 0;
-    currentThread->_Context->uc_link = NULL;
-    delete currentThread->_Context;
-    delete currentThread;
-    currentThread = NULL;
-}
+
 
 static int unlockFunc(unsigned int lock) {
 
@@ -116,7 +107,7 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
 	}
 
 	libInitialized = true;
-
+    interrupt_disable();
 	// whether the thread has been created
 	if (thread_create(func, arg) == -1) {
 		return -1;
@@ -132,12 +123,20 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
 	currentThread = readyQueue.front();
     readyQueue.pop();
     //******
-    interrupt_disable();
-	swapcontext(globalContext, currentThread->_Context);
 
+	swapcontext(globalContext, currentThread->_Context);
+    //cout<<"In init ,After swap context!"<<endl;
 	while (!readyQueue.empty()) {
 		if (currentThread->ifCompleted) {
-			deleteThread();
+            delete currentThread->stack;
+            currentThread->_Context->uc_stack.ss_sp = NULL;
+            currentThread->_Context->uc_stack.ss_size = 0;
+            currentThread->_Context->uc_stack.ss_flags = 0;
+            currentThread->_Context->uc_link = NULL;
+            delete currentThread->_Context;
+            delete currentThread;
+            currentThread = NULL;
+            //cout<<"current0 completed"<<endl;
 		}
 		//***switch
         Thread* t = readyQueue.front();
@@ -145,10 +144,20 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
         currentThread = t;
         //***switch
         swapcontext(globalContext, currentThread->_Context);
+        //cout<<"current1 completed"<<endl;
 	}
     if(!currentThread)
     {
-        deleteThread();
+        //cout<<"current2 completed"<<endl;
+        delete currentThread->stack;
+        currentThread->_Context->uc_stack.ss_sp = NULL;
+        currentThread->_Context->uc_stack.ss_size = 0;
+        currentThread->_Context->uc_stack.ss_flags = 0;
+        currentThread->_Context->uc_link = NULL;
+        delete currentThread->_Context;
+        delete currentThread;
+        currentThread = NULL;
+        //cout<<"current3 completed"<<endl;
     }
 	// end here
 	cout << "Thread library exiting.\n";
@@ -168,20 +177,10 @@ int thread_create(thread_startfunc_t func, void *arg) {
 
 	static int threadId = 0;
 
-	/*
-	unsigned int thread_ID;
-	char* stack;
-	bool ifCompleted;
-	ucontext_t* _Context;
-
-	ucontext_ptr->uc_stack.ss_sp = stack;
-    ucontext_ptr->uc_stack.ss_size = STACK_SIZE;
-    ucontext_ptr->uc_stack.ss_flags = 0;
-    ucontext_ptr->uc_link = NULL;
-	*/
 
 	// 创建对象
-    try {
+    try
+    {
 	Thread* thread;
 	thread = new Thread;
 	thread->_Context = new ucontext_t;
@@ -203,8 +202,7 @@ int thread_create(thread_startfunc_t func, void *arg) {
 
     readyQueue.push(thread);
     }
-	// 这里缺一句, 不知道怎么写
-	// 如果越界了返回-1, 如果创建失败返回-1
+
     catch (bad_alloc) {
         interrupt_enable();
         return -1;
@@ -257,7 +255,8 @@ int thread_lock(unsigned int lock) {
 		if (pri_lock->held == NULL) {
 		// 如果没有则给当前线程
 			pri_lock->held = currentThread;
-		} else if (pri_lock->held->thread_ID == currentThread->thread_ID) {
+		}
+        else if (pri_lock->held->thread_ID == currentThread->thread_ID) {
 		// 如果线程ID一样则返回
 			interrupt_enable();
 			return -1;
@@ -288,14 +287,14 @@ int thread_unlock(unsigned int lock) {
 }
 
 int thread_wait(unsigned int lock, unsigned int cond) {
-	if(!libraryInitialized) {
+	if(!libInitialized) {
         return -1;
     }
 
     interrupt_disable();
 
-    int ifUnlock == unlockFunc(lock);
-
+    int ifUnlock = unlockFunc(lock);
+    //cout<<"ifunlock: "<<ifUnlock<<endl;
     if (ifUnlock == 0) {
     	conditions[cond].push(currentThread);
     	swapcontext(currentThread->_Context, globalContext);
@@ -318,16 +317,20 @@ int thread_signal(unsigned int lock, unsigned int cond) {
 	// find all threads waiting for that cond
     map<unsigned int, queue<Thread*> >::iterator it = conditions.find(cond);
 
-    if (it == conditions.end()) {
-    	return 0;
-    }
-
-    // 如果都在等待, 选择最上面的线程放到readyQueue里面
-    if(!it->second.empty())
+    if (it == conditions.end())
     {
-        Thread* t = it->second.front();
-        it->second.pop();
-        readyQueue.push(t);
+        interrupt_enable();
+        return 0;
+    }
+    else
+    {
+    // 如果都在等待, 选择最上面的线程放到readyQueue里面
+        if(!it->second.empty())
+        {
+            Thread* t = it->second.front();
+            it->second.pop();
+            readyQueue.push(t);
+        }
     }
 
 	interrupt_enable();
@@ -346,17 +349,20 @@ int thread_broadcast(unsigned int lock, unsigned int cond) {
     map<unsigned int, queue<Thread*> >::iterator it = conditions.find(cond);
 
     if (it == conditions.end()) {
-    	return 0;
+        interrupt_enable();
+        return 0;
     }
 
     // 如果都在等待, 选择上面的所有线程放到readyQueue里面
-    while(!it->second.empty())
+    else
     {
-        Thread* t = it->second.front();
-        it->second.pop();
-        readyQueue.push(t);
+        while (!it->second.empty())
+        {
+            Thread *t = it->second.front();
+            it->second.pop();
+            readyQueue.push(t);
+        }
     }
-
 	interrupt_enable();
 	return 0;
 
