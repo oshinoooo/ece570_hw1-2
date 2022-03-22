@@ -26,24 +26,28 @@ static map<unsigned int, thread_control_block*> lock_holder;
 static map<unsigned int, queue<thread_control_block*>> lock_queue;
 static map<unsigned int, queue<thread_control_block*>> cond_queue;
 
+static void release(thread_control_block* thread_ptr) {
+    if (!thread_ptr) {
+        return;
+    }
+
+    thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
+    thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
+    thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
+    thread_ptr->ucontext_ptr->uc_link           = nullptr;
+    delete[] thread_ptr->ucontext_ptr->uc_stack.ss_sp;
+    delete thread_ptr->ucontext_ptr;
+    delete thread_ptr;
+    thread_ptr = nullptr;
+}
+
 static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
     interrupt_enable();
     func(arg);
     interrupt_disable();
 
-    if (!thread_ptr) {
-        return;
-    }
-
     // release the memory
-    thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
-    thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
-    thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
-    thread_ptr->ucontext_ptr->uc_link           = nullptr;
-    delete [] (char*)thread_ptr->ucontext_ptr->uc_stack.ss_sp;
-    delete thread_ptr->ucontext_ptr;
-    delete thread_ptr;
-    thread_ptr = nullptr;
+    release(thread_ptr);
 
     // go back to main thread
     setcontext(main_thread_ptr->ucontext_ptr);
@@ -71,6 +75,9 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
         ready_queue.pop();
         swapcontext(main_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
     }
+
+    // release the memory
+    release(main_thread_ptr);
 
     cout << "Thread library exiting." << endl;
 
