@@ -107,7 +107,6 @@ int thread_create(thread_startfunc_t func, void *arg) {
 
     TCB* newThread = new TCB;
     newThread->status = 0;
-
     newThread->ucontext = new ucontext_t;
     getcontext(newThread->ucontext);
     newThread->ucontext->uc_stack.ss_sp = new char [STACK_SIZE];

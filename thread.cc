@@ -26,11 +26,16 @@ static map<unsigned int, thread_control_block*> lock_holder;
 static map<unsigned int, queue<thread_control_block*>> lock_queue;
 static map<unsigned int, queue<thread_control_block*>> cond_queue;
 
-static void release(thread_control_block* thread_ptr) {
+static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
+    interrupt_enable();
+    func(arg);
+    interrupt_disable();
+
     if (!thread_ptr) {
         return;
     }
 
+    // release the memory
     thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
     thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
     thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
@@ -39,14 +44,8 @@ static void release(thread_control_block* thread_ptr) {
     delete thread_ptr->ucontext_ptr;
     delete thread_ptr;
     thread_ptr = nullptr;
-}
 
-static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
-    interrupt_enable();
-    func(arg);
-    interrupt_disable();
-
-    release(thread_ptr);
+    // go back to main thread
     setcontext(main_thread_ptr->ucontext_ptr);
 }
 
@@ -87,7 +86,6 @@ int thread_create(thread_startfunc_t func, void* arg) {
     }
 
     thread_control_block* new_thread = new thread_control_block();
-
     new_thread->ucontext_ptr = new ucontext_t;
     getcontext(new_thread->ucontext_ptr);
     new_thread->ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
@@ -133,7 +131,7 @@ int thread_lock(unsigned int lock) {
         return -1;
     }
 
-    if (lock_holder[lock]) {
+    if (lock_holder[lock] != nullptr) {
         lock_queue[lock].push(running_thread_ptr);
         swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
     }
