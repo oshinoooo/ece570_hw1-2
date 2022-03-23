@@ -2,7 +2,6 @@
 #include <vector>
 #include <queue>
 #include <map>
-#include <fstream>
 #include <limits.h>
 
 #include "thread.h"
@@ -67,14 +66,20 @@ void init(int argc, char* argv[]) {
 }
 
 void sendRequest(void* ptr) {
-    thread_lock(myLock);
+    int ret = thread_lock(myLock);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
 
     long requester_id = (long)ptr;
     queue<string>& tracks = requests[requester_id];
 
     while (!tracks.empty()) {
         while(max_disk_queue <= buffer.size() || buffer.count(requester_id)) {
-            thread_wait(myLock, cond);
+            ret = thread_wait(myLock, cond);
+            if (ret == -1) {
+                cout << "Error in thread library." << endl;
+            }
         }
 
         buffer.insert({requester_id, tracks.front()});
@@ -83,20 +88,32 @@ void sendRequest(void* ptr) {
 
         tracks.pop();
 
-        thread_broadcast(myLock, cond);
+        ret = thread_broadcast(myLock, cond);
+        if (ret == -1) {
+            cout << "Error in thread library." << endl;
+        }
 
 //        printSchedulerState();
     }
 
-    thread_unlock(myLock);
+    ret = thread_unlock(myLock);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
 }
 
 void processRequest(void* ptr) {
-    thread_lock(myLock);
+    int ret = thread_lock(myLock);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
 
     while (max_disk_queue > 0 || !buffer.empty()) {
         while(max_disk_queue > buffer.size()) {
-            thread_wait(myLock, cond);
+            ret = thread_wait(myLock, cond);
+            if (ret == -1) {
+                cout << "Error in thread library." << endl;
+            }
         }
 
         long requester_id;
@@ -122,25 +139,39 @@ void processRequest(void* ptr) {
             max_disk_queue = min(max_disk_queue, number_of_requesters);
         }
 
-        thread_broadcast(myLock, cond);
+        ret = thread_broadcast(myLock, cond);
+        if (ret == -1) {
+            cout << "Error in thread library." << endl;
+        }
 
 //        printSchedulerState();
     }
 
-    thread_unlock(myLock);
+    ret = thread_unlock(myLock);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
 }
 
 void startDiskScheduler(void* ptr) {
-    thread_create(processRequest, nullptr);
+    int ret = thread_create(processRequest, nullptr);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
 
     for (long i = 0; i < requests.size(); ++i) {
-        long index = i;
-        thread_create(sendRequest, (void*)index);
+        ret = thread_create(sendRequest, (void*)i);
+        if (ret == -1) {
+            cout << "Error in thread library." << endl;
+        }
     }
 }
 
 int main(int argc, char* argv[]) {
     init(argc, argv);
-    thread_libinit(startDiskScheduler, nullptr);
+    int ret = thread_libinit(startDiskScheduler, nullptr);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
     return 0;
 }
