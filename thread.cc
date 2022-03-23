@@ -9,12 +9,9 @@
 using namespace std;
 
 struct thread_control_block {
-public:
-    thread_control_block() : ucontext_ptr(nullptr) {}
-    thread_control_block(ucontext_t* _ucontext_ptr) : ucontext_ptr(_ucontext_ptr) {}
-
-public:
+    bool is_finished;
     ucontext_t* ucontext_ptr;
+    thread_control_block() : is_finished(false), ucontext_ptr(nullptr) {}
 };
 
 static bool is_initialized = false;
@@ -43,19 +40,12 @@ static int release(thread_control_block* thread_ptr) {
     return 0;
 }
 
-static int thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
+static int thread_monitor(thread_startfunc_t func, void* arg) {
     interrupt_enable();
     func(arg);
     interrupt_disable();
-
-    // release the memory
-    if (release(thread_ptr) == -1) {
-        return -1;
-    }
-
-    // go back to main thread
+    running_thread_ptr->is_finished = true;
     setcontext(main_thread_ptr->ucontext_ptr);
-
     return 0;
 }
 
@@ -96,6 +86,9 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     interrupt_disable();
 
     while (!ready_queue.empty()) {
+        if (running_thread_ptr->is_finished) {
+            release(running_thread_ptr);
+        }
         running_thread_ptr = ready_queue.front();
         ready_queue.pop();
         swapcontext(main_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);

@@ -50,7 +50,6 @@ static int start(thread_startfunc_t func, void *arg) {
     func(arg);
     interrupt_disable();
 	currentThread->ifCompleted = true;
-
 	swapcontext(currentThread->_Context, globalContext);
 	return 0;
 }
@@ -86,31 +85,23 @@ static int unlockFunc(unsigned int lock) {
 }
 
 int thread_libinit(thread_startfunc_t func, void *arg) {
-	// if the lib has already been initialized, return -1;
 	if (libInitialized) {
 		return -1;
 	}
 
 	libInitialized = true;
-    interrupt_disable();
-	// whether the thread has been created
-	if (thread_create(func, arg) == -1) {
-		return -1;
-	}
-
-	if (readyQueue.empty()) {
-		return -1;
-	}
 
 	globalContext = new ucontext_t;
 	getcontext(globalContext);
-    //****switch
+
+    thread_create(func, arg);
 	currentThread = readyQueue.front();
     readyQueue.pop();
-    //******
+
+    interrupt_disable();
 
 	swapcontext(globalContext, currentThread->_Context);
-    //cout<<"In init ,After swap context!"<<endl;
+
 	while (!readyQueue.empty()) {
 		if (currentThread->ifCompleted) {
             delete currentThread->stack;
@@ -121,19 +112,15 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
             delete currentThread->_Context;
             delete currentThread;
             currentThread = NULL;
-            //cout<<"current0 completed"<<endl;
 		}
-		//***switch
-        Thread* t = readyQueue.front();
+
+        currentThread = readyQueue.front();
         readyQueue.pop();
-        currentThread = t;
-        //***switch
+
         swapcontext(globalContext, currentThread->_Context);
-        //cout<<"current1 completed"<<endl;
 	}
-    if(!currentThread)
-    {
-        //cout<<"current2 completed"<<endl;
+
+    if(!currentThread) {
         delete currentThread->stack;
         currentThread->_Context->uc_stack.ss_sp = NULL;
         currentThread->_Context->uc_stack.ss_size = 0;
@@ -142,10 +129,10 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
         delete currentThread->_Context;
         delete currentThread;
         currentThread = NULL;
-        //cout<<"current3 completed"<<endl;
     }
-	// end here
+
 	cout << "Thread library exiting.\n";
+
     exit(0);
 }
 
