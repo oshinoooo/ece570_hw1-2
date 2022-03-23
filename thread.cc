@@ -23,19 +23,34 @@ static map<unsigned int, thread_control_block*> lock_holder;
 static map<unsigned int, queue<thread_control_block*>> lock_queue;
 static map<pair<unsigned int, unsigned int>, queue<thread_control_block*>> cond_queue;
 
-static void release(thread_control_block* thread_ptr) {
-    if (!thread_ptr) {
+static void release() {
+    if (!running_thread_ptr || !running_thread_ptr->is_finished) {
         return;
     }
 
-    delete (char*)thread_ptr->ucontext_ptr->uc_stack.ss_sp;
-    thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
-    thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
-    thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
-    thread_ptr->ucontext_ptr->uc_link           = nullptr;
-    delete thread_ptr->ucontext_ptr;
-    delete thread_ptr;
-    thread_ptr = nullptr;
+    delete (char*) running_thread_ptr->ucontext_ptr->uc_stack.ss_sp;
+    running_thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
+    running_thread_ptr->ucontext_ptr->uc_stack.ss_size  = 0;
+    running_thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
+    running_thread_ptr->ucontext_ptr->uc_link           = nullptr;
+    delete running_thread_ptr->ucontext_ptr;
+    delete running_thread_ptr;
+    running_thread_ptr = nullptr;
+}
+
+static void scheduler(thread_startfunc_t func, void* arg) {
+    while (!ready_queue.empty()) {
+        release();
+        running_thread_ptr = ready_queue.front();
+        ready_queue.pop();
+        swapcontext(main_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
+    }
+
+    release();
+
+    cout << "Thread library exiting." << endl;
+
+    exit(0);
 }
 
 static void thread_monitor(thread_startfunc_t func, void* arg) {
@@ -43,7 +58,7 @@ static void thread_monitor(thread_startfunc_t func, void* arg) {
     func(arg);
     interrupt_disable();
     running_thread_ptr->is_finished = true;
-    setcontext(main_thread_ptr->ucontext_ptr);
+    swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
 }
 
 static int my_unlock(unsigned int lock) {
@@ -70,29 +85,30 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     }
 
     is_initialized = true;
-    running_thread_ptr = nullptr;
     main_thread_ptr = new thread_control_block();
+    main_thread_ptr->is_finished = false;
     main_thread_ptr->ucontext_ptr = new ucontext_t;
     getcontext(main_thread_ptr->ucontext_ptr);
+    main_thread_ptr->ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
+    main_thread_ptr->ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
+    main_thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
+    main_thread_ptr->ucontext_ptr->uc_link           = nullptr;
+    makecontext(main_thread_ptr->ucontext_ptr, (void (*)()) scheduler, 2, func, arg);
+
+    if (thread_create(func, arg) == -1) {
+        return -1;
+    }
+
+    running_thread_ptr = ready_queue.front();
+    ready_queue.pop();
 
     func(arg);
 
     interrupt_disable();
 
-    while (!ready_queue.empty()) {
-        if (running_thread_ptr && running_thread_ptr->is_finished) {
-            release(running_thread_ptr);
-        }
-        running_thread_ptr = ready_queue.front();
-        ready_queue.pop();
-        swapcontext(main_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
-    }
+    running_thread_ptr->is_finished = true;
 
-    release(running_thread_ptr);
-
-    cout << "Thread library exiting." << endl;
-
-    exit(0);
+    swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
 }
 
 int thread_create(thread_startfunc_t func, void* arg) {

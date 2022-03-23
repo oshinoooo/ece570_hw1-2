@@ -73,10 +73,10 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     SWITCH_THREAD->status = 0;
     SWITCH_THREAD->ucontext = new ucontext_t;
     getcontext(SWITCH_THREAD->ucontext);
-    SWITCH_THREAD->ucontext->uc_stack.ss_sp = new char [STACK_SIZE];
-    SWITCH_THREAD->ucontext->uc_stack.ss_size = STACK_SIZE;
+    SWITCH_THREAD->ucontext->uc_stack.ss_sp    = new char[STACK_SIZE];
+    SWITCH_THREAD->ucontext->uc_stack.ss_size  = STACK_SIZE;
     SWITCH_THREAD->ucontext->uc_stack.ss_flags = 0;
-    SWITCH_THREAD->ucontext->uc_link = NULL;
+    SWITCH_THREAD->ucontext->uc_link           = NULL;
     makecontext(SWITCH_THREAD->ucontext, (void (*)()) process, 2, func, arg);
 
     if (thread_create(func, arg) == -1) {
@@ -87,6 +87,7 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     READY_QUEUE.pop();
 
     func(arg);
+
     interrupt_disable();
 
     RUNNING_THREAD->status = 3;
