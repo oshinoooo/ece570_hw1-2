@@ -109,6 +109,8 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     running_thread_ptr->is_finished = true;
 
     swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
+
+    return 0;
 }
 
 int thread_create(thread_startfunc_t func, void* arg) {
