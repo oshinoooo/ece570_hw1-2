@@ -69,10 +69,8 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     }
 
     islib = true;
-
     SWITCH_THREAD = new TCB;
     SWITCH_THREAD->status = 0;
-
     SWITCH_THREAD->ucontext = new ucontext_t;
     getcontext(SWITCH_THREAD->ucontext);
     SWITCH_THREAD->ucontext->uc_stack.ss_sp = new char [STACK_SIZE];
@@ -156,8 +154,7 @@ int thread_lock(unsigned int lock) {
 
     if (LOCK_QUEUE_MAP.count(lock) == 0) {
         LOCK_OWNER_MAP[lock] = NULL;
-        queue<TCB*> NEW_LOCK_QUEUE;
-        LOCK_QUEUE_MAP.insert(pair<unsigned int, queue<TCB*> >(lock, NEW_LOCK_QUEUE));
+        LOCK_QUEUE_MAP.insert(pair<unsigned int, queue<TCB*>>(lock, queue<TCB*>()));
     }
 
     if (LOCK_OWNER_MAP[lock] != NULL) {
@@ -224,13 +221,12 @@ int thread_wait(unsigned int lock, unsigned int cond) {
         LOCK_QUEUE_MAP[lock].pop();
     }
 
-    pair<unsigned int, unsigned int> lock_cond_pair = make_pair(lock,cond);
-    if (CV_QUEUE_MAP.find(lock_cond_pair) == CV_QUEUE_MAP.end()){
+    if (CV_QUEUE_MAP.find({lock, cond}) == CV_QUEUE_MAP.end()){
         queue<TCB*> NEW_CV_QUEUE;
-        CV_QUEUE_MAP[lock_cond_pair] = NEW_CV_QUEUE;
+        CV_QUEUE_MAP[{lock, cond}] = NEW_CV_QUEUE;
     }
 
-    CV_QUEUE_MAP[lock_cond_pair].push(RUNNING_THREAD);
+    CV_QUEUE_MAP[{lock, cond}].push(RUNNING_THREAD);
 
     swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
 
@@ -247,10 +243,9 @@ int thread_signal(unsigned int lock, unsigned int cond) {
         return -1;
     }
 
-    pair<unsigned int, unsigned int> lock_cond_pair = make_pair(lock,cond);
-    if (!CV_QUEUE_MAP[lock_cond_pair].empty()) {
-        READY_QUEUE.push(CV_QUEUE_MAP[lock_cond_pair].front());
-        CV_QUEUE_MAP[lock_cond_pair].pop();
+    if (!CV_QUEUE_MAP[{lock, cond}].empty()) {
+        READY_QUEUE.push(CV_QUEUE_MAP[{lock, cond}].front());
+        CV_QUEUE_MAP[{lock, cond}].pop();
     }
 
     interrupt_enable();
@@ -266,10 +261,9 @@ int thread_broadcast(unsigned int lock, unsigned int cond) {
         return -1;
     }
 
-    pair<unsigned int, unsigned int> lock_cond_pair = make_pair(lock,cond);
-    while (!CV_QUEUE_MAP[lock_cond_pair].empty()) {
-        READY_QUEUE.push(CV_QUEUE_MAP[lock_cond_pair].front());
-        CV_QUEUE_MAP[lock_cond_pair].pop();
+    while (!CV_QUEUE_MAP[{lock, cond}].empty()) {
+        READY_QUEUE.push(CV_QUEUE_MAP[{lock, cond}].front());
+        CV_QUEUE_MAP[{lock, cond}].pop();
     }
 
     interrupt_enable();

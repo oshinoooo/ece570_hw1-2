@@ -38,13 +38,12 @@ static void release(thread_control_block* thread_ptr) {
     thread_ptr = nullptr;
 }
 
-static int thread_monitor(thread_startfunc_t func, void* arg) {
+static void thread_monitor(thread_startfunc_t func, void* arg) {
     interrupt_enable();
     func(arg);
     interrupt_disable();
     running_thread_ptr->is_finished = true;
     setcontext(main_thread_ptr->ucontext_ptr);
-    return 0;
 }
 
 static int my_unlock(unsigned int lock) {
@@ -70,14 +69,12 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
         return -1;
     }
 
-    // initialize
     is_initialized = true;
     running_thread_ptr = nullptr;
     main_thread_ptr = new thread_control_block();
     main_thread_ptr->ucontext_ptr = new ucontext_t;
     getcontext(main_thread_ptr->ucontext_ptr);
 
-    // call user's function
     func(arg);
 
     interrupt_disable();
@@ -91,8 +88,7 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
         swapcontext(main_thread_ptr->ucontext_ptr, running_thread_ptr->ucontext_ptr);
     }
 
-    // release the memory
-    release(main_thread_ptr);
+    release(running_thread_ptr);
 
     cout << "Thread library exiting." << endl;
 
@@ -113,7 +109,7 @@ int thread_create(thread_startfunc_t func, void* arg) {
     new_thread->ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
     new_thread->ucontext_ptr->uc_stack.ss_flags = 0;
     new_thread->ucontext_ptr->uc_link           = nullptr;
-    makecontext(new_thread->ucontext_ptr, (void (*)())thread_monitor, 3, func, arg, new_thread);
+    makecontext(new_thread->ucontext_ptr, (void (*)())thread_monitor, 2, func, arg);
 
     ready_queue.push(new_thread);
 
