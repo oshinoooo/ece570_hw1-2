@@ -21,7 +21,7 @@ static thread_control_block* main_thread_ptr;
 static queue<thread_control_block*> ready_queue;
 static map<unsigned int, thread_control_block*> lock_holder;
 static map<unsigned int, queue<thread_control_block*>> lock_queue;
-static map<pair<unsigned int, unsigned int>, queue<thread_control_block*>> cond_queue;
+static map<unsigned int, queue<thread_control_block*>> cond_queue;
 
 static void release() {
     if (!running_thread_ptr || !running_thread_ptr->is_finished) {
@@ -38,7 +38,7 @@ static void release() {
     running_thread_ptr = nullptr;
 }
 
-static void scheduler(thread_startfunc_t func, void* arg) {
+static void scheduler() {
     while (!ready_queue.empty()) {
         release();
         running_thread_ptr = ready_queue.front();
@@ -93,9 +93,10 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     main_thread_ptr->ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
     main_thread_ptr->ucontext_ptr->uc_stack.ss_flags = 0;
     main_thread_ptr->ucontext_ptr->uc_link           = nullptr;
-    makecontext(main_thread_ptr->ucontext_ptr, (void (*)()) scheduler, 2, func, arg);
+    makecontext(main_thread_ptr->ucontext_ptr, (void (*)()) scheduler, 0);
 
-    if (thread_create(func, arg) == -1) {
+    int ret = thread_create(func, arg);
+    if (ret == -1) {
         return -1;
     }
 
@@ -202,7 +203,7 @@ int thread_wait(unsigned int lock, unsigned int cond) {
         return -1;
     }
 
-    cond_queue[{lock, cond}].push(running_thread_ptr);
+    cond_queue[cond].push(running_thread_ptr);
 
     swapcontext(running_thread_ptr->ucontext_ptr, main_thread_ptr->ucontext_ptr);
 
@@ -218,9 +219,9 @@ int thread_signal(unsigned int lock, unsigned int cond) {
 
     interrupt_disable();
 
-    if (!cond_queue[{lock, cond}].empty()) {
-        ready_queue.push(cond_queue[{lock, cond}].front());
-        cond_queue[{lock, cond}].pop();
+    if (!cond_queue[cond].empty()) {
+        ready_queue.push(cond_queue[cond].front());
+        cond_queue[cond].pop();
     }
 
     interrupt_enable();
@@ -235,9 +236,9 @@ int thread_broadcast(unsigned int lock, unsigned int cond) {
 
     interrupt_disable();
 
-    while (!cond_queue[{lock, cond}].empty()) {
-        ready_queue.push(cond_queue[{lock, cond}].front());
-        cond_queue[{lock, cond}].pop();
+    while (!cond_queue[cond].empty()) {
+        ready_queue.push(cond_queue[cond].front());
+        cond_queue[cond].pop();
     }
 
     interrupt_enable();
