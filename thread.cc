@@ -23,9 +23,9 @@ static map<unsigned int, thread_control_block*> lock_holder;
 static map<unsigned int, queue<thread_control_block*>> lock_queue;
 static map<pair<unsigned int, unsigned int>, queue<thread_control_block*>> cond_queue;
 
-static int release(thread_control_block* thread_ptr) {
+static void release(thread_control_block* thread_ptr) {
     if (!thread_ptr) {
-        return -1;
+        return;
     }
 
     thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
@@ -36,8 +36,6 @@ static int release(thread_control_block* thread_ptr) {
     delete thread_ptr->ucontext_ptr;
     delete thread_ptr;
     thread_ptr = nullptr;
-
-    return 0;
 }
 
 static int thread_monitor(thread_startfunc_t func, void* arg) {
