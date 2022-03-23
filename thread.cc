@@ -26,9 +26,9 @@ static map<unsigned int, thread_control_block*> lock_holder;
 static map<unsigned int, queue<thread_control_block*>> lock_queue;
 static map<pair<unsigned int, unsigned int>, queue<thread_control_block*>> cond_queue;
 
-static void release(thread_control_block* thread_ptr) {
+static int release(thread_control_block* thread_ptr) {
     if (!thread_ptr) {
-        return;
+        return -1;
     }
 
     thread_ptr->ucontext_ptr->uc_stack.ss_sp    = nullptr;
@@ -39,18 +39,24 @@ static void release(thread_control_block* thread_ptr) {
     delete thread_ptr->ucontext_ptr;
     delete thread_ptr;
     thread_ptr = nullptr;
+
+    return 0;
 }
 
-static void thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
+static int thread_monitor(thread_startfunc_t func, void* arg, thread_control_block* thread_ptr) {
     interrupt_enable();
     func(arg);
     interrupt_disable();
 
     // release the memory
-    release(thread_ptr);
+    if (release(thread_ptr) == -1) {
+        return -1;
+    }
 
     // go back to main thread
     setcontext(main_thread_ptr->ucontext_ptr);
+
+    return 0;
 }
 
 int thread_libinit(thread_startfunc_t func, void* arg) {
@@ -77,7 +83,8 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     }
 
     // release the memory
-    release(main_thread_ptr);
+    if (release(main_thread_ptr) == -1)
+        return -1;
 
     cout << "Thread library exiting." << endl;
 
@@ -91,8 +98,8 @@ int thread_create(thread_startfunc_t func, void* arg) {
 
     interrupt_disable();
 
-    thread_control_block* new_thread = new thread_control_block();
-    new_thread->ucontext_ptr = new ucontext_t;
+    thread_control_block* new_thread            = new thread_control_block();
+    new_thread->ucontext_ptr                    = new ucontext_t;
     getcontext(new_thread->ucontext_ptr);
     new_thread->ucontext_ptr->uc_stack.ss_sp    = new char[STACK_SIZE];
     new_thread->ucontext_ptr->uc_stack.ss_size  = STACK_SIZE;
@@ -176,13 +183,26 @@ int thread_unlock(unsigned int lock) {
 }
 
 int thread_wait(unsigned int lock, unsigned int cond) {
-    thread_unlock(lock);
-
     if (!is_initialized) {
         return -1;
     }
 
     interrupt_disable();
+
+    if (lock_holder[lock] == nullptr ||
+        lock_holder[lock] != running_thread_ptr) {
+        interrupt_enable();
+        return -1;
+    }
+
+    lock_holder[lock] = nullptr;
+
+    if (!lock_queue[lock].empty()) {
+        thread_control_block* thread_ptr = lock_queue[lock].front();
+        lock_queue[lock].pop();
+        lock_holder[lock] = thread_ptr;
+        ready_queue.push(thread_ptr);
+    }
 
     cond_queue[{lock, cond}].push(running_thread_ptr);
 
@@ -190,9 +210,7 @@ int thread_wait(unsigned int lock, unsigned int cond) {
 
     interrupt_enable();
 
-    thread_lock(lock);
-
-    return 0;
+    return thread_lock(lock);
 }
 
 int thread_signal(unsigned int lock, unsigned int cond) {

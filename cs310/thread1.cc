@@ -159,11 +159,7 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
     exit(0);
 }
 
-// Step2
-// When a thread calls thread_create, the caller does not yield the CPU. 
-// The newly created thread is put on the ready queue but is not executed right away.
 int thread_create(thread_startfunc_t func, void *arg) {
-
 	if (!libInitialized) {
 		return -1;
 	}
@@ -172,59 +168,46 @@ int thread_create(thread_startfunc_t func, void *arg) {
 
 	static int threadId = 0;
 
-
-	// 创建对象
-    try
-    {
-	Thread* thread;
-	thread = new Thread;
-	thread->_Context = new ucontext_t;
-	thread->thread_ID = threadId;
-	threadId++;
+    Thread* thread;
+    thread = new Thread;
+    thread->_Context = new ucontext_t;
+    thread->thread_ID = threadId;
+    threadId++;
     getcontext(thread->_Context);
-    // to stack
-	thread->stack = new char[STACK_SIZE];
-	thread->ifCompleted = false;
-	thread->_Context->uc_stack.ss_sp = thread->stack;
-	thread->_Context->uc_stack.ss_size = STACK_SIZE;
-	thread->_Context->uc_stack.ss_flags = 0;
-	thread->_Context->uc_link = NULL;
-    /*
-     * Direct the new thread to start by calling start(arg1, arg2).
-     */
-    // 需要一个start函数开始
+
+    thread->stack = new char[STACK_SIZE];
+    thread->ifCompleted = false;
+    thread->_Context->uc_stack.ss_sp = thread->stack;
+    thread->_Context->uc_stack.ss_size = STACK_SIZE;
+    thread->_Context->uc_stack.ss_flags = 0;
+    thread->_Context->uc_link = NULL;
+
     makecontext(thread->_Context, (void (*)()) start, 2, func, arg);
 
     readyQueue.push(thread);
-    }
 
-    catch (bad_alloc) {
-        interrupt_enable();
-        return -1;
-    }
     interrupt_enable();
+
 	return 0;
 }
 
-// Step1
 int thread_yield(void) {
 	if (!libInitialized) {
 		return -1;
 	}
-	// Lecture10 Page29
+
 	interrupt_disable();
 
-	// 当暂停的时候, 挂起当前线程, 转换上下文
-	// 用GlobalContext这个指针存
 	readyQueue.push(currentThread);
+
 	swapcontext(currentThread->_Context, globalContext);
 
 	interrupt_enable();
+
 	return 0;
 }
 
 int thread_lock(unsigned int lock) {
-
 	if (!libInitialized) {
 		return -1;
 	}
@@ -329,8 +312,8 @@ int thread_signal(unsigned int lock, unsigned int cond) {
     }
 
 	interrupt_enable();
-	return 0;
 
+	return 0;
 }
 
 int thread_broadcast(unsigned int lock, unsigned int cond) {
