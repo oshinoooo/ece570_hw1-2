@@ -37,22 +37,13 @@ struct Lock
 	queue<Thread*> waitQueue;
 };
 
-// the queue needs to be handled
-static queue<Thread*> readyQueue;
-// empty Context pointer for temp store.
+static bool libInitialized = false;
 static ucontext_t* globalContext = NULL;
-// Current Running Thread
 static Thread* currentThread = NULL;
 
-// 因为方法里面的参数是unsigned int, 所以用一个map来存, 
-static map<unsigned int, queue<Thread*> > conditions;
+static queue<Thread*> readyQueue;
+static map<unsigned int, queue<Thread*>> conditions;
 static map<unsigned int, Lock*> lockMap;
-
-// 是否已经初始化的标志位
-static bool libInitialized = false;
-
-// type define thread_startfunc_t
-typedef void (*thread_startfunc_t)(void *);
 
 static int start(thread_startfunc_t func, void *arg) {
     interrupt_enable();
@@ -65,7 +56,6 @@ static int start(thread_startfunc_t func, void *arg) {
 }
 
 static int unlockFunc(unsigned int lock) {
-
 	map<unsigned int, Lock*>::iterator iter = lockMap.find(lock);
 
 	if (iter == lockMap.end()) {

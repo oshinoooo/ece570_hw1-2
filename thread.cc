@@ -59,6 +59,25 @@ static int thread_monitor(thread_startfunc_t func, void* arg, thread_control_blo
     return 0;
 }
 
+static int my_unlock(unsigned int lock) {
+    if (lock_holder[lock] == nullptr ||
+        lock_holder[lock] != running_thread_ptr) {
+        interrupt_enable();
+        return -1;
+    }
+
+    lock_holder[lock] = nullptr;
+
+    if (!lock_queue[lock].empty()) {
+        thread_control_block* thread_ptr = lock_queue[lock].front();
+        lock_queue[lock].pop();
+        lock_holder[lock] = thread_ptr;
+        ready_queue.push(thread_ptr);
+    }
+
+    return 0;
+}
+
 int thread_libinit(thread_startfunc_t func, void* arg) {
     if (is_initialized) {
         return -1;
@@ -83,8 +102,7 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     }
 
     // release the memory
-    if (release(main_thread_ptr) == -1)
-        return -1;
+    release(main_thread_ptr);
 
     cout << "Thread library exiting." << endl;
 
@@ -162,24 +180,11 @@ int thread_unlock(unsigned int lock) {
 
     interrupt_disable();
 
-    if (lock_holder[lock] == nullptr ||
-        lock_holder[lock] != running_thread_ptr) {
-        interrupt_enable();
-        return -1;
-    }
-
-    lock_holder[lock] = nullptr;
-
-    if (!lock_queue[lock].empty()) {
-        thread_control_block* thread_ptr = lock_queue[lock].front();
-        lock_queue[lock].pop();
-        lock_holder[lock] = thread_ptr;
-        ready_queue.push(thread_ptr);
-    }
+    int ret = my_unlock(lock);
 
     interrupt_enable();
 
-    return 0;
+    return ret;
 }
 
 int thread_wait(unsigned int lock, unsigned int cond) {
@@ -189,19 +194,8 @@ int thread_wait(unsigned int lock, unsigned int cond) {
 
     interrupt_disable();
 
-    if (lock_holder[lock] == nullptr ||
-        lock_holder[lock] != running_thread_ptr) {
-        interrupt_enable();
+    if (my_unlock(lock) == -1) {
         return -1;
-    }
-
-    lock_holder[lock] = nullptr;
-
-    if (!lock_queue[lock].empty()) {
-        thread_control_block* thread_ptr = lock_queue[lock].front();
-        lock_queue[lock].pop();
-        lock_holder[lock] = thread_ptr;
-        ready_queue.push(thread_ptr);
     }
 
     cond_queue[{lock, cond}].push(running_thread_ptr);
