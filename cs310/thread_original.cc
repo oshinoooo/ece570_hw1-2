@@ -20,8 +20,8 @@ static TCB* SWITCH_THREAD;
 
 static queue<TCB*> READY_QUEUE;
 static map<unsigned int, TCB*> LOCK_OWNER_MAP;
-static map<unsigned int, queue<TCB*> > LOCK_QUEUE_MAP;
-static map<pair<unsigned int, unsigned int>, queue<TCB*> > CV_QUEUE_MAP;
+static map<unsigned int, queue<TCB*>> LOCK_QUEUE_MAP;
+static map<pair<unsigned int, unsigned int>, queue<TCB*>> CV_QUEUE_MAP;
 
 static void cleanup() {
     if (RUNNING_THREAD == NULL) {
@@ -55,6 +55,14 @@ static void process(thread_startfunc_t func, void *arg) {
     exit(0);
 }
 
+static void STUB(thread_startfunc_t func, void *arg) {
+    interrupt_enable();
+    func(arg);
+    interrupt_disable();
+    RUNNING_THREAD->status = 3;
+    swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
+}
+
 int thread_libinit(thread_startfunc_t func, void *arg) {
     if (islib) {
         return -1;
@@ -85,14 +93,6 @@ int thread_libinit(thread_startfunc_t func, void *arg) {
 
     RUNNING_THREAD->status = 3;
 
-    swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
-}
-
-static void STUB(thread_startfunc_t func, void *arg) {
-    interrupt_enable();
-    func(arg);
-    interrupt_disable();
-    RUNNING_THREAD->status = 3;
     swapcontext(RUNNING_THREAD->ucontext, SWITCH_THREAD->ucontext);
 }
 
