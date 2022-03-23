@@ -15,8 +15,8 @@ struct thread_control_block {
 };
 
 static bool is_initialized = false;
-static thread_control_block* main_thread_ptr;
 static thread_control_block* running_thread_ptr;
+static thread_control_block* main_thread_ptr;
 
 static queue<thread_control_block*> ready_queue;
 static map<unsigned int, thread_control_block*> lock_holder;
@@ -73,9 +73,9 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
         return -1;
     }
 
+    // initialize
     is_initialized = true;
-
-    // initialize the scheduler
+    running_thread_ptr = nullptr;
     main_thread_ptr = new thread_control_block();
     main_thread_ptr->ucontext_ptr = new ucontext_t;
     getcontext(main_thread_ptr->ucontext_ptr);
@@ -86,7 +86,7 @@ int thread_libinit(thread_startfunc_t func, void* arg) {
     interrupt_disable();
 
     while (!ready_queue.empty()) {
-        if (running_thread_ptr->is_finished) {
+        if (running_thread_ptr && running_thread_ptr->is_finished) {
             release(running_thread_ptr);
         }
         running_thread_ptr = ready_queue.front();
