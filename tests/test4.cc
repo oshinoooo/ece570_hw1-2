@@ -24,13 +24,8 @@ void show(void* ptr) {
 }
 
 void start(void* ptr) {
-    int ret;
-    ret = thread_libinit(show, nullptr);
-    if (ret == -1) {
-        cout << "Thread library initialization failed." << endl;
-    }
-
     for (long i = 0; i < 5; ++i) {
+        int ret;
         ret = thread_create(show, (void*)i);
         if (ret == -1) {
             cout << "Error in thread library." << endl;
@@ -40,6 +35,11 @@ void start(void* ptr) {
 
 int main(int argc, char* argv[]) {
     int ret;
+    ret = thread_lock(lock);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
+
     ret = thread_libinit(start, nullptr);
     if (ret == -1) {
         cout << "Thread library initialization failed." << endl;
