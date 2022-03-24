@@ -13,9 +13,19 @@ void show(void* ptr) {
         cout << "Error in thread library." << endl;
     }
 
+    ret = thread_lock(lock);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
+
     for (int i = 0; i < 100; ++i)
         cout << (long)ptr << " ";
     cout << endl;
+
+    ret = thread_unlock(lock);
+    if (ret == -1) {
+        cout << "Error in thread library." << endl;
+    }
 
     ret = thread_unlock(lock);
     if (ret == -1) {
