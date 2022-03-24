@@ -35,11 +35,6 @@ void start(void* ptr) {
 
 int main(int argc, char* argv[]) {
     int ret;
-    ret = thread_create(show, (void*)1);
-    if (ret == -1) {
-        cout << "Error in thread library." << endl;
-    }
-
     ret = thread_libinit(start, nullptr);
     if (ret == -1) {
         cout << "Thread library initialization failed." << endl;
