@@ -11,6 +11,8 @@ bool buffer = false;
 int number = 10;
 
 void put(void* ptr) {
+    cout << "void put(void* ptr)" << endl;
+
     int ret;
 
     ret = thread_lock(lock);
@@ -20,6 +22,7 @@ void put(void* ptr) {
 
     while (number) {
         while (buffer) {
+            cout << "put wait." << endl;
             ret = thread_wait(lock, cond);
             if (ret == -1) {
                 cout << "Error in thread library." << endl;
@@ -43,6 +46,8 @@ void put(void* ptr) {
 }
 
 void get(void* ptr) {
+    cout << "void get(void* ptr)" << endl;
+
     int ret;
 
     ret = thread_lock(lock);
@@ -52,6 +57,7 @@ void get(void* ptr) {
 
     while (number) {
         while (!buffer) {
+            cout << "get wait." << endl;
             ret = thread_wait(lock, cond);
             if (ret == -1) {
                 cout << "Error in thread library." << endl;
