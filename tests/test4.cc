@@ -26,11 +26,6 @@ void show(void* ptr) {
     if (ret == -1) {
         cout << "Error in thread library." << endl;
     }
-
-    ret = thread_unlock(lock);
-    if (ret == -1) {
-        cout << "Error in thread library." << endl;
-    }
 }
 
 void start(void* ptr) {
