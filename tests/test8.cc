@@ -1,6 +1,6 @@
-#include<iostream>
+#include <iostream>
 
-#include"thread.h"
+#include "thread.h"
 
 using namespace std;
 

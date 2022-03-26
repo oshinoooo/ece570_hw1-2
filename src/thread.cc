@@ -63,7 +63,6 @@ static void thread_monitor(thread_startfunc_t func, void* arg) {
 
 static int my_unlock(unsigned int lock) {
     if (lock_holder[lock] == nullptr || lock_holder[lock] != running_thread_ptr) {
-        interrupt_enable();
         return -1;
     }
 
@@ -200,6 +199,7 @@ int thread_wait(unsigned int lock, unsigned int cond) {
     interrupt_disable();
 
     if (my_unlock(lock) == -1) {
+        interrupt_enable();
         return -1;
     }
 
